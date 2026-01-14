@@ -8,15 +8,19 @@ from typing import List
 db = SQLAlchemy()
 
 class User(db.Model):
+
+    __tablename__ = "user"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(8), unique=True, nullable=False)
     firstname: Mapped[str] = mapped_column(String(120), nullable=False)
     lastname: Mapped[str] = mapped_column(String(120), nullable=False)
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     
-    children: Mapped[List["Post"]] = relationship(back_populates="user")
-    children: Mapped[List["Follower"]] = relationship(back_populates="user")
-    children: Mapped[List["Comment"]] = relationship(back_populates="user")
+    posts: Mapped[List["Post"]] = relationship(back_populates="user")
+    following: Mapped[List["Follower"]] = relationship(back_populates="from_user", foreign_keys="Follower.user_from_id",)
+    followers: Mapped[List["Follower"]] = relationship(back_populates="to_user", foreign_keys="Follower.user_to_id",)
+    comments: Mapped[List["Comment"]] = relationship(back_populates="author")
 
 
     def serialize(self):
@@ -27,28 +31,37 @@ class User(db.Model):
         }
 
 class Post(db.Model):
+    __tablename__ = "post"
     id: Mapped[int] = mapped_column(primary_key=True)
     description: Mapped[str] = mapped_column(String(120), nullable=False)
     img_url: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
-    children: Mapped[List["Comment"]] = relationship(back_populates="post")
-    
+    user: Mapped["User"] = relationship(back_populates="posts")
+    media: Mapped[List["Media"]] = relationship(back_populates="post")
+    comments: Mapped[List["Comment"]] = relationship(back_populates="post")
+
+
 
     def serialize(self):
         return {
             "id": self.id,
+            "description": self.description,
             "img_url": self.img_url,
             "user_id": self.user_id,
             # do not serialize the password, its a security breach
         }
 
 class Comment(db.Model):
+
+    __tablename__ = "comment"
     id: Mapped[int] = mapped_column(primary_key=True)
     comment_text: Mapped[str] = mapped_column(String(120), nullable=False)
 
     post_id: Mapped[int] = mapped_column(ForeignKey("post.id"))
+    post: Mapped["Post"] = relationship(back_populates="comments")
     author_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    author: Mapped["User"] = relationship(back_populates="comments")
     
 
     def serialize(self):
@@ -61,12 +74,13 @@ class Comment(db.Model):
         }
     
 class Media(db.Model):
+    __tablename__ = "media"
     id: Mapped[int] = mapped_column(primary_key=True)
     type: Mapped[str] = mapped_column(String(120), nullable=False)
-    url: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
+    url: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     
     post_id: Mapped[int] = mapped_column(ForeignKey("post.id"))
-    children: Mapped[List["Post"]] = relationship(back_populates="media")
+    post: Mapped["Post"] = relationship(back_populates="media")
     
   
 
@@ -80,13 +94,15 @@ class Media(db.Model):
         }
     
 class Follower(db.Model):
+    __tablename__ = "follower"
     id: Mapped[int] = mapped_column(primary_key=True)
 	
     user_from_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
 
     user_to_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
 
-    children: Mapped[List["User"]] = relationship(back_populates="follower")
+    from_user: Mapped["User"] = relationship(back_populates="following", foreign_keys=[user_from_id])
+    to_user: Mapped["User"] = relationship(back_populates="followers", foreign_keys=[user_to_id])
     
 
     def serialize(self):
